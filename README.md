@@ -26,3 +26,5 @@ Additional option: by searching [F3] for `Meshroom update cameras`, you can copy
 
 ## Credits:
 Big thanks to Jakub Uhlik for sharing [Point Cloud Visualizer](https://github.com/uhlik/bpy/blob/master/view3d_point_cloud_visualizer.py) to view point clouds in the addon.
+
+![](https://github.com/tibicen/meshroom2blender/blob/4014a9c5d739e7a6fb84a6bc8f903ae68247acb1/meshroom2blender.png)
