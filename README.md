@@ -1,5 +1,5 @@
 # meshroom2blender
-Blender importer of meshroom datafiles: cameras, images, sparse pointcloud and obj's.
+[Blender](https://www.blender.org/) importer of [AliceVision Meshroom](https://alicevision.github.io/#meshroom) datafiles: cameras, images, sparse pointcloud and obj's.
 
 Basic implementation of meshroom importer. If you have sphisticated node three it will use only the first nodes from the file.
 Addon assumes you did compute each stages/nodes, and the output is same.
@@ -21,4 +21,8 @@ Additional option: by searching [F3] for `Meshroom update cameras`, you can copy
 ## TODO:
 - seach through node tree and give option which elements import;
 - if node is not computed then put some info about it;
-- use undisorted images.
+- use undisorted images;
+- use of different images with different sizes. (!) 
+
+## Credits:
+Big thanks to Jakub Uhlik for sharing [Point Cloud Visualizer](https://github.com/uhlik/bpy/blob/master/view3d_point_cloud_visualizer.py) to view point clouds in the addon.
