@@ -111,7 +111,7 @@ def import_cameras(cameras_sfm, img_depth):
         focal_length = float(view['metadata']['Exif:FocalLength'])
         pose = poses[view['poseId']]['transform']
         intrinsic = intrinsics[view['intrinsicId']]
-        pxFocalLength = int(intrinsic['pxFocalLength'])
+        pxFocalLength = float(intrinsic['pxFocalLength'])
         principalPoint = [float(x) for x in intrinsic['principalPoint']]
         
         # camera
