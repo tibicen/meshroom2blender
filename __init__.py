@@ -37,12 +37,10 @@ bl_info = {
     "category": "Import-Export"}
 
 
-filepath = r'D:\Koszyk\koszyk.mg'
-
 # module import https://github.com/uhlik/bpy/blob/master/view3d_point_cloud_visualizer.py
 # thanks to Jakub Uhlik
 vis_mod = 'view3d_point_cloud_visualizer'
-if vis_mod in sys.modules.keys() and sys.modules[vis_mod].bl_info['version'] <= (0, 7, 0):
+if vis_mod in sys.modules.keys() and sys.modules[vis_mod].bl_info['version'] <= (0, 8, 11):
     local_visualizer = False
 else:
     from . import view3d_point_cloud_visualizer as point_cloud
@@ -63,11 +61,12 @@ def find_view_layer(coll, lay_coll=None):
         return None
 
 
-def read_meshlab(filepath):
+def get_meshlab_paths(filepath):
     'Handle meshlab file'
-
+    filepath = '/home/tibicen/Dokumenty/Photogrammetry/Koszyk/koszyk.mg'
     cache = os.path.join(os.path.dirname(filepath), 'MeshroomCache')
     data = json.load(open(filepath, 'r'))
+    data
     try:
         nodeSFM = data['graph']['StructureFromMotion_1']
         nodeType = nodeSFM['nodeType']
@@ -76,9 +75,12 @@ def read_meshlab(filepath):
         #     cache=cache, nodeType=nodeType, uid0=uid0)
         cameras_sfm = nodeSFM['outputs']['outputViewsAndPoses'].format(
             cache=cache, nodeType=nodeType, uid0=uid0)
-        cloud = os.path.join(cache, nodeType, uid0, 'cloud_and_poses.ply')
+        # sparse = nodeSFM['outputs']['output'].format(
+        #     cache=cache, nodeType=nodeType, uid0=uid0)
+        sparse = nodeSFM['outputs']['extraInfoFolder'].format(
+            cache=cache, nodeType=nodeType, uid0=uid0) + 'cloud_and_poses.ply'
     except KeyError:
-        cameras_sfm = cloud = None
+        cameras_sfm = sparse = None
     try:
         nodeMesh = data['graph']['Meshing_1']
         dense_obj = nodeMesh['outputs']['output'].format(
@@ -91,7 +93,7 @@ def read_meshlab(filepath):
             cache=cache, nodeType=nodeTex['nodeType'], uid0=nodeTex['uids']['0'])
     except KeyError:
         tex_obj = None
-    return (cameras_sfm, cloud, dense_obj, tex_obj)
+    return (cameras_sfm, sparse, dense_obj, tex_obj)
 
 
 def import_cameras(cameras_sfm, img_depth):
@@ -100,6 +102,7 @@ def import_cameras(cameras_sfm, img_depth):
     poses = {x['poseId']: x['pose'] for x in data['poses']}
     intrinsics = {x['intrinsicId']: x for x in data['intrinsics']}
 
+    #TODO dimensions per camera
     render = bpy.context.scene.render
     render.resolution_x = int(data['views'][0]['width'])
     render.resolution_y = int(data['views'][0]['height'])
@@ -126,10 +129,12 @@ def import_cameras(cameras_sfm, img_depth):
         # image
         bcam.show_background_images = True
         bg = bcam.background_images.new()
+        # TODO if undistored then exr from .mg
         bg.image = bpy.data.images.load(path)
         bg.display_depth = img_depth
         
         # camera object
+        # TODO rename camera as image or as exr nr id.
         ob = bpy.data.objects.new(f'View {view_id}', bcam)
         bpy.context.collection.objects.link(ob)
         loc = [float(x) for x in pose['center']]
@@ -233,18 +238,22 @@ class import_meshroom(bpy.types.Operator):
         lay_col = find_view_layer(camera_col)
         context.view_layer.active_layer_collection = lay_col
         # filepath = PATH
-        cameras_sfm, cloud, dense_obj, tex_obj = read_meshlab(filepath)
+        cameras_sfm, sparse, dense_obj, tex_obj = get_meshlab_paths(filepath)
         if self.cameras:
             import_cameras(cameras_sfm, self.img_front)
         lay_col = find_view_layer(col)
         context.view_layer.active_layer_collection = lay_col
         if self.sparse:
-            empty = bpy.data.objects.new('sparse cloud SFM', None)
-            col.objects.link(empty)
-            empty.select_set(True)
-            context.view_layer.objects.active = empty
-            bpy.ops.point_cloud_visualizer.load_ply_to_cache(filepath=cloud)
-            bpy.ops.point_cloud_visualizer.draw()
+            if os.path.exists(sparse):
+                empty = bpy.data.objects.new('sparse cloud SFM', None)
+                col.objects.link(empty)
+                empty.select_set(True)
+                context.view_layer.objects.active = empty
+                bpy.ops.point_cloud_visualizer.load_ply_to_cache(filepath=sparse)
+                bpy.ops.point_cloud_visualizer.draw()
+            else:
+                self.report({'ERROR_INVALID_INPUT'}, "You need to use .ply format instead of .abc to use colored pointcloud. "\
+                                                 "You can always import .abc through Blender alembic importer.")
         if self.dense and dense_obj:
             import_object(dense_obj)
         if self.textured and tex_obj:

@@ -18,6 +18,10 @@ Important note: For sparse point cloud to import you should change in `Structure
 
 Additional option: by searching [F3] for `Meshroom update cameras`, you can copy settings from active camera to all meshroom cameras.
 
+## Changelog:
+- 0.1.0 -
+- 0.0.1 - initial working functionality
+
 ## TODO:
 - seach through node tree and give option which elements import;
 - if node is not computed then put some info about it;
