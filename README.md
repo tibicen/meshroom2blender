@@ -19,7 +19,7 @@ Important note: For sparse point cloud to import you should change in `Structure
 Additional option: by searching [F3] for `Meshroom update cameras`, you can copy settings from active camera to all meshroom cameras.
 
 ## Changelog:
-- 0.1.0 -
+- 0.1.0 - undisorted is now active, info when no .ply format, update point cloud vis, views named by filenames.
 - 0.0.1 - initial working functionality
 
 ## TODO:

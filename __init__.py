@@ -29,7 +29,7 @@ bl_info = {
     "name": "Meshroom importer",
     "description": "Imports from .mg file cameras, images, sparse and obj",
     "author": "Dawid Huczyński",
-    "version": (0, 0, 1),
+    "version": (0, 1, 0),
     "blender": (2, 80, 0),
     "location": "File > Import > Import Meshroom",
     "warning": "This addon is still in development.",
@@ -61,9 +61,8 @@ def find_view_layer(coll, lay_coll=None):
         return None
 
 
-def get_meshlab_paths(filepath):
-    'Handle meshlab file'
-    filepath = '/home/tibicen/Dokumenty/Photogrammetry/Koszyk/koszyk.mg'
+def get_meshroom_paths(filepath):
+    'Handle meshroom file'
     cache = os.path.join(os.path.dirname(filepath), 'MeshroomCache')
     data = json.load(open(filepath, 'r'))
     data
@@ -82,6 +81,13 @@ def get_meshlab_paths(filepath):
     except KeyError:
         cameras_sfm = sparse = None
     try:
+        prepDense = data['graph']['PrepareDenseScene_1']
+        nodeType = prepDense['nodeType']
+        uid0 = prepDense['uids']['0']
+        exr_folder = prepDense['outputs']['output'].format(cache=cache, nodeType=nodeType, uid0=uid0)
+    except KeyError:
+        exr_folder = None
+    try:
         nodeMesh = data['graph']['Meshing_1']
         dense_obj = nodeMesh['outputs']['output'].format(
             cache=cache, nodeType=nodeMesh['nodeType'], uid0=nodeMesh['uids']['0'])
@@ -93,10 +99,10 @@ def get_meshlab_paths(filepath):
             cache=cache, nodeType=nodeTex['nodeType'], uid0=nodeTex['uids']['0'])
     except KeyError:
         tex_obj = None
-    return (cameras_sfm, sparse, dense_obj, tex_obj)
+    return (cameras_sfm, sparse, dense_obj, tex_obj, exr_folder)
 
 
-def import_cameras(cameras_sfm, img_depth):
+def import_cameras(cameras_sfm, img_depth, undistorted, exr_folder):
     'read camera sfm and imports to blender'
     data = json.load(open(cameras_sfm, 'r'))
     poses = {x['poseId']: x['pose'] for x in data['poses']}
@@ -109,7 +115,10 @@ def import_cameras(cameras_sfm, img_depth):
 
     for view in data['views']:
         view_id = view['viewId']
-        path = view['path']
+        if undistorted:
+            path = os.path.join(exr_folder, f'{view_id}.exr')
+        else:
+            path = view['path']
         width, height = int(view['width']), int(view['height'])
         focal_length = float(view['metadata']['Exif:FocalLength'])
         pose = poses[view['poseId']]['transform']
@@ -129,13 +138,15 @@ def import_cameras(cameras_sfm, img_depth):
         # image
         bcam.show_background_images = True
         bg = bcam.background_images.new()
-        # TODO if undistored then exr from .mg
         bg.image = bpy.data.images.load(path)
         bg.display_depth = img_depth
         
         # camera object
-        # TODO rename camera as image or as exr nr id.
-        ob = bpy.data.objects.new(f'View {view_id}', bcam)
+        if undistorted:
+            name = f'View {view_id}'
+        else:
+            name = 'View {}'.format(os.path.splitext(os.path.basename(path)))
+        ob = bpy.data.objects.new(name, bcam)
         bpy.context.collection.objects.link(ob)
         loc = [float(x) for x in pose['center']]
         rot = [float(x) for x in pose['rotation']]
@@ -143,45 +154,6 @@ def import_cameras(cameras_sfm, img_depth):
         m = Matrix(rotation)
         ob.matrix_world = m.to_4x4() @ Matrix().Rotation(pi, 4, 'X')
         ob.location = Vector(loc)
-
-
-def import_sparse_depricated(cloud):
-    '''Depricated. Use view3d_point_cloud_visualizer instead.'''
-    # read .ply file
-    f = open(cloud, 'r')
-    ply = f.read()
-    header = ply[:1000].split('end_header\n')[0].split('\n')
-    header
-    assert header[0] == 'ply'
-    assert header[1].startswith('format ascii')
-    elements = []
-    tmp_prop = []
-    for x in header[2:]:
-        a = x.split(' ')
-        if a[0] == 'element':
-            if tmp_prop:
-                elements[-1]['props'] = list(tmp_prop)
-                tmp_prop = []
-            el = {'name': a[1], 'nr': a[2]}
-            elements.append(el)
-        elif a[0] == 'property':
-            prop = {'name': a[2], 'type': a[1]}
-            tmp_prop.append(prop)
-
-    elements[-1]['props'] = list(tmp_prop)
-
-    points = ply.split('end_header\n')[1].split('\n')
-    if points[-1] == '':
-        points.pop()
-
-    verts = []
-    for point in points:
-        verts.append((float(x) for x in point.split()[:3]))
-
-    mesh = bpy.data.meshes.new('sparse cloud SFM')
-    mesh.from_pydata(verts, [], [])
-    obj = bpy.data.objects.new('sparse cloud SFM', mesh)
-    bpy.context.collection.objects.link(obj)
 
 
 def import_object(filepath):
@@ -202,7 +174,7 @@ class import_meshroom(bpy.types.Operator):
     directory: bpy.props.StringProperty(
         maxlen=1024, subtype='FILE_PATH', options={'HIDDEN', 'SKIP_SAVE'})
 
-    cameras: bpy.props.BoolProperty(default=True, name='Views', description='Import views as cameras and images')
+    import_views: bpy.props.BoolProperty(default=True, name='Views', description='Import views as cameras and images')
     
     undistorted: bpy.props.BoolProperty(default=True, name='Undistorted', description='Better, but heavy images')
     
@@ -212,11 +184,11 @@ class import_meshroom(bpy.types.Operator):
     ]
     img_front: bpy.props.EnumProperty(items=DEPTH, name='Depth', description='', default='FRONT')
 
-    sparse: bpy.props.BoolProperty(default=True, name='Import SFM', description='')
+    import_sparse: bpy.props.BoolProperty(default=True, name='Import SFM', description='')
 
-    dense: bpy.props.BoolProperty(default=False, name='Import dense mesh', description='')
+    import_dense: bpy.props.BoolProperty(default=False, name='Import dense mesh', description='')
 
-    textured: bpy.props.BoolProperty(default=True, name='Import textured mesh', description='')
+    import_textured: bpy.props.BoolProperty(default=True, name='Import textured mesh', description='')
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
@@ -238,12 +210,12 @@ class import_meshroom(bpy.types.Operator):
         lay_col = find_view_layer(camera_col)
         context.view_layer.active_layer_collection = lay_col
         # filepath = PATH
-        cameras_sfm, sparse, dense_obj, tex_obj = get_meshlab_paths(filepath)
-        if self.cameras:
-            import_cameras(cameras_sfm, self.img_front)
+        cameras_sfm, sparse, dense_obj, tex_obj, exr_folder = get_meshroom_paths(filepath)
+        if self.import_views:
+            import_cameras(cameras_sfm, self.img_front, self.undistorted, exr_folder)
         lay_col = find_view_layer(col)
         context.view_layer.active_layer_collection = lay_col
-        if self.sparse:
+        if self.import_sparse:
             if os.path.exists(sparse):
                 empty = bpy.data.objects.new('sparse cloud SFM', None)
                 col.objects.link(empty)
@@ -251,13 +223,21 @@ class import_meshroom(bpy.types.Operator):
                 context.view_layer.objects.active = empty
                 bpy.ops.point_cloud_visualizer.load_ply_to_cache(filepath=sparse)
                 bpy.ops.point_cloud_visualizer.draw()
-            else:
+            elif os.path.exitsts(sparse.replace('.ply', '.abc')):
                 self.report({'ERROR_INVALID_INPUT'}, "You need to use .ply format instead of .abc to use colored pointcloud. "\
                                                  "You can always import .abc through Blender alembic importer.")
-        if self.dense and dense_obj:
-            import_object(dense_obj)
-        if self.textured and tex_obj:
-            import_object(tex_obj)
+            else:
+                self.report({'ERROR_INVALID_INPUT'}, "Missing Meshroom reconstruction: StructureFromMotion (.ply format).")
+        if self.import_dense:
+            if dense_obj:
+                import_object(dense_obj)
+            else:
+                self.report({'ERROR_INVALID_INPUT'}, "Missing Meshroom reconstruction: Meshing.")
+        if self.import_textured and tex_obj:
+            if tex_obj:
+                import_object(tex_obj)
+            else:
+                self.report({'ERROR_INVALID_INPUT'}, "Missing Meshroom reconstruction: Texturing.")
         return {"FINISHED"}
 
 
