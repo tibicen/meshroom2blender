@@ -40,7 +40,7 @@ bl_info = {
 # module import https://github.com/uhlik/bpy/blob/master/view3d_point_cloud_visualizer.py
 # thanks to Jakub Uhlik
 vis_mod = 'view3d_point_cloud_visualizer'
-if vis_mod in sys.modules.keys() and sys.modules[vis_mod].bl_info['version'] <= (0, 8, 11):
+if vis_mod in sys.modules.keys() and sys.modules[vis_mod].bl_info['version'] <= (0, 8, 12):
     local_visualizer = False
 else:
     from . import view3d_point_cloud_visualizer as point_cloud
@@ -143,6 +143,7 @@ def import_cameras(cameras_sfm, img_depth, undistorted, exr_folder):
         
         # camera object
         if undistorted:
+            # TODO: if undistorted then apply some resize, or add separate images in right place.
             name = f'View {view_id}'
         else:
             name = 'View {}'.format(os.path.splitext(os.path.basename(path)))
@@ -176,19 +177,19 @@ class import_meshroom(bpy.types.Operator):
 
     import_views: bpy.props.BoolProperty(default=True, name='Views', description='Import views as cameras and images')
     
-    undistorted: bpy.props.BoolProperty(default=True, name='Undistorted', description='Better, but heavy images')
+    undistorted: bpy.props.BoolProperty(default=False, name='Undistorted', description='Better, but heavy images')
     
     DEPTH = [
         ('FRONT', 'FRONT', 'Preview semi transparent image in front of the objects', '', 0),
         ('BACK', 'BACK', 'Preview image behing objects', '', 1)
     ]
-    img_front: bpy.props.EnumProperty(items=DEPTH, name='Depth', description='', default='FRONT')
+    img_front: bpy.props.EnumProperty(items=DEPTH, name='Image View Depth', description='', default='FRONT')
 
-    import_sparse: bpy.props.BoolProperty(default=True, name='Import SFM', description='')
+    import_sparse: bpy.props.BoolProperty(default=True, name='Import StructureFromMotion', description='')
 
-    import_dense: bpy.props.BoolProperty(default=False, name='Import dense mesh', description='')
+    import_dense: bpy.props.BoolProperty(default=False, name='Import Meshing Node', description='')
 
-    import_textured: bpy.props.BoolProperty(default=True, name='Import textured mesh', description='')
+    import_textured: bpy.props.BoolProperty(default=True, name='Import Texturing Node', description='')
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
