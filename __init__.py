@@ -224,7 +224,7 @@ class import_meshroom(bpy.types.Operator):
                 context.view_layer.objects.active = empty
                 bpy.ops.point_cloud_visualizer.load_ply_to_cache(filepath=sparse)
                 bpy.ops.point_cloud_visualizer.draw()
-            elif os.path.exitsts(sparse.replace('.ply', '.abc')):
+            elif os.path.exists(sparse.replace('.ply', '.abc')):
                 self.report({'ERROR_INVALID_INPUT'}, "You need to use .ply format instead of .abc to use colored pointcloud. "\
                                                  "You can always import .abc through Blender alembic importer.")
             else:
